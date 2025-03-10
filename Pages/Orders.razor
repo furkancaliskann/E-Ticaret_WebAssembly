@@ -1,0 +1,247 @@
+﻿@page "/orders"
+@using E_Ticaret_WebAssembly.Dtos
+@using E_Ticaret_WebAssembly.Dtos.User
+@using E_Ticaret_WebAssembly.Entities
+@using System.Text.Json;
+@inject AuthState AuthState
+@inject NavigationManager NavManager
+@inject HttpClient Http
+
+<style>
+    body {
+    font-family: 'Arial', sans-serif;
+    background-color: #f8f9fa;
+    color: #333;
+    }
+
+    h3 {
+    font-size: 2rem;
+    font-weight: 600;
+    color: #007bff;
+    margin-bottom: 20px;
+    text-align: left;
+    }
+
+    .table {
+    width: 100%;
+    margin-top: 20px;
+    border-collapse: collapse;
+    }
+
+    .table th, .table td {
+    padding: 12px;
+    text-align: left;
+    border: 1px solid #dee2e6;
+    }
+
+    .table th {
+    background-color: #007bff;
+    color: white;
+    }
+
+    .table td {
+    background-color: #fff;
+    }
+
+    button.btn-sm {
+    font-size: 0.875rem;
+    padding: 5px 10px;
+    border-radius: 5px;
+    transition: background-color 0.3s ease;
+    }
+
+    button.btn-sm:hover {
+    opacity: 0.8;
+    }
+
+    button.btn-primary {
+    background-color: #007bff;
+    border-color: #007bff;
+    }
+
+    button.btn-primary:hover {
+    background-color: #0056b3;
+    border-color: #004085;
+    }
+
+    button.btn-danger {
+    background-color: #dc3545;
+    border-color: #dc3545;
+    }
+
+    button.btn-danger:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+    }
+
+    .modal-content {
+    border-radius: 10px;
+    background-color: #fff;
+    padding: 30px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .modal-header {
+    background-color: #007bff;
+    color: white;
+    padding-bottom: 15px;
+    font-size: 1.2rem;
+    font-weight: bold;
+    }
+
+    .modal-footer {
+    border-top: 1px solid #ddd;
+    padding-top: 15px;
+    }
+
+    .mt-3 {
+    margin-top: 20px;
+    }
+
+    .ml-2 {
+    margin-left: 10px;
+    }
+
+    .w-auto {
+    width: auto;
+    }
+
+</style>
+
+<h3 class="text-primary">Siparişler</h3>
+
+<table class="table table-bordered table-striped">
+    <thead>
+        <tr>
+            @if (isAdmin)
+            {
+                <th>Kullanıcı Adı</th>
+            }
+            <th>Sipariş Numarası</th>
+            <th>Sipariş Tarihi</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var order in orders)
+        {
+            <tr>
+                @if (isAdmin)
+                {
+                    <td>@userNames[order.KullaniciId]</td>
+                }
+                <td>@order.Id</td>
+                <td>@order.SiparisTarihi</td>
+                <td>
+                    <button class="btn btn-primary btn-sm" @onclick="() => ShowOrderDetails(order.Id)">Detayları Gör</button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<OrderDetailModal IsVisible="@showModal" OrderNumber="@selectedOrderId" />
+
+@code {
+    private GetUserDto? authState = null;
+    private List<Order> orders = new();
+    private Dictionary<int, string> userNames = new();
+    private bool showModal = false;
+    private int selectedOrderId;
+    private bool isAdmin = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        authState = await AuthState.GetAuthenticationStateAsync();
+
+        if (authState == null)
+            NavManager.NavigateTo("/login");
+        else
+            isAdmin = authState.Rol.Equals("Admin");
+
+        if(!isAdmin)
+        {
+            await GetOrdersByUserId(authState!.Id);
+        }
+        else
+        {
+            await GetAllOrders();
+            await GetAllUsers();
+        }
+    }
+
+    private async Task GetOrdersByUserId(int userId)
+    {
+        try
+        {
+            var response = await Http.GetAsync("https://localhost:7144/api/orders/userId/" + userId);
+
+            var result = await response.Content.ReadFromJsonAsync<Result>();
+
+            if (result?.StatusCode == StatusCodeEnum.Ok && result.Data != null)
+            {
+                var resultOrders = JsonSerializer.Deserialize<IEnumerable<Order>>(result.Data.ToString()!,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                if (resultOrders != null)
+                    orders = resultOrders.ToList();
+            }
+        }
+        catch{}
+    }
+    private async Task GetAllOrders()
+    {
+        try
+        {
+            var response = await Http.GetAsync("https://localhost:7144/api/orders");
+
+            var result = await response.Content.ReadFromJsonAsync<Result>();
+
+            if (result?.StatusCode == StatusCodeEnum.Ok && result.Data != null)
+            {
+                var resultOrders = JsonSerializer.Deserialize<IEnumerable<Order>>(result.Data.ToString()!,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                if (resultOrders != null)
+                    orders = resultOrders.ToList();
+            }
+        }
+        catch { }
+    }
+    private async Task GetAllUsers()
+    {
+        try
+        {
+            var response = await Http.GetAsync("https://localhost:7144/api/users");
+
+            var result = await response.Content.ReadFromJsonAsync<Result>();
+
+            if (result?.StatusCode == StatusCodeEnum.Ok && result.Data != null)
+            {
+                var resultUsers = JsonSerializer.Deserialize<IEnumerable<User>>(result.Data.ToString()!,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                if (resultUsers != null)
+                {
+                    var users = resultUsers.ToList();
+
+                    foreach (var user in users)
+                    {
+                        userNames.Add(user.Id, user.KullaniciAdi);
+                    }
+                }
+            }
+        }
+        catch { }
+    }
+    
+
+    private async Task ShowOrderDetails(int orderId)
+    {
+        showModal = false;
+        await Task.Delay(10);
+        selectedOrderId = orderId;
+        showModal = true;
+        await InvokeAsync(StateHasChanged);
+    }
+}

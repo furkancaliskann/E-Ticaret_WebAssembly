@@ -1,0 +1,40 @@
+﻿@page "/"
+@inject AuthState AuthState
+@inject NavigationManager NavManager
+
+<style>
+    h3 {
+    font-size: 2rem;
+    font-weight: 600;
+    color: #007bff;
+    margin-bottom: 20px;
+    }
+
+    p.lead {
+    font-size: 1.2rem;
+    color: #495057;
+    line-height: 1.5;
+    }
+
+    .container {
+    max-width: 800px;
+    margin-top: 50px;
+    }
+</style>
+
+<PageTitle>E-Ticaret Sipariş Yönetim Sistemi</PageTitle>
+
+<div class="container mt-5">
+    <h3 class="text-center text-primary">ANA SAYFA</h3>
+    <p class="lead text-center">Kayıtlı ürünlere göz atmak için sol pencereden "Ürünler" sekmesini ziyaret edebilirsiniz.</p>
+</div>
+
+@code{
+    protected override async Task OnInitializedAsync()
+    {
+        var getUserDto = await AuthState.GetAuthenticationStateAsync();
+
+        if (getUserDto == null)
+            NavManager.NavigateTo("/login");
+    }
+}

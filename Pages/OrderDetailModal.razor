@@ -1,0 +1,129 @@
+﻿@using E_Ticaret_WebAssembly.Dtos
+@using E_Ticaret_WebAssembly.Entities
+@using System.Text.Json;
+@inject HttpClient Http
+
+
+<div class="modal" tabindex="-1" role="dialog" style="display:@(IsVisible ? "block" : "none")">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Sipariş Detayı</h5>
+                <button type="button" class="close" @onclick="CloseModal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                @if (orderDetails == null || productNames.Count < orderDetails.Count)
+                {
+                    <p>Detaylar yükleniyor...</p>
+                }
+                else
+                {
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Ürün Adı</th>
+                                <th>Miktar</th>
+                                <th>Fiyat</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var detail in orderDetails)
+                            {
+                                <tr>
+                                    <td>@productNames[detail.UrunId]</td>
+                                    <td>@detail.Miktar</td>
+                                    <td>@detail.Fiyat TL</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+
+                    <h3>Toplam Fiyat : @totalPrice TL</h3>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+
+@code {
+    [Parameter] public int OrderNumber { get; set; }
+    [Parameter] public bool IsVisible { get; set; }
+
+    private List<OrderDetail>? orderDetails = new();
+    private Dictionary<int, string> productNames = new();
+    private decimal totalPrice = 0;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        productNames.Clear();
+        totalPrice = 0;
+        orderDetails = new();
+
+        if (OrderNumber > 0)
+        {
+            await GetOrderDetails(OrderNumber);
+            await GetProductsWithDeleted();
+        }
+    }
+
+    private async Task GetOrderDetails(int orderId)
+    {
+        try
+        {
+            var response = await Http.GetAsync("https://localhost:7144/api/orders/orderId/" + orderId);
+
+            var result = await response.Content.ReadFromJsonAsync<Result>();
+
+            if (result?.StatusCode == StatusCodeEnum.Ok && result.Data != null)
+            {
+                var resultOrders = JsonSerializer.Deserialize<IEnumerable<OrderDetail>>(result.Data.ToString()!,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                if (resultOrders != null)
+                    orderDetails = resultOrders.ToList();
+            }
+        }
+        catch { }
+    }
+
+    private async Task GetProductsWithDeleted()
+    {
+        try
+        {
+            List<Product> products = new();
+
+            var response = await Http.GetAsync("https://localhost:7144/api/products/withdeleted");
+
+            var result = await response.Content.ReadFromJsonAsync<Result>();
+
+            if (result?.StatusCode == StatusCodeEnum.Ok && result.Data != null)
+            {
+                var resultProducts = JsonSerializer.Deserialize<IEnumerable<Product>>(result.Data.ToString()!,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                if (resultProducts != null)
+                    products = resultProducts.ToList();
+
+                foreach (OrderDetail orderDetail in orderDetails!)
+                {
+                    var product = products.Find(x => x.Id == orderDetail.UrunId);
+                    if (product != null)
+                    {
+                        productNames.Add(orderDetail.UrunId, product.UrunAdi);
+                        totalPrice += orderDetail.Fiyat;
+                    }
+                    else
+                        productNames.Add(orderDetail.UrunId, "");
+
+                }
+            }
+        }
+        catch { }
+    }
+
+    private void CloseModal() => IsVisible = false;
+
+}

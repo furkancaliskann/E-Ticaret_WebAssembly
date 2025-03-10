@@ -1,0 +1,487 @@
+﻿@page "/products"
+@using E_Ticaret_WebAssembly.Dtos
+@using E_Ticaret_WebAssembly.Entities
+@using E_Ticaret_WebAssembly.Dtos.Product
+@using System.Text.Json;
+@inject AuthState AuthState
+@inject NavigationManager NavManager
+@inject HttpClient Http
+@inject CartService CartService
+
+<PageTitle>Ürünler</PageTitle>
+
+<style>
+    body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Arial', sans-serif;
+    background-color: #f8f9fa;
+    color: #333;
+    }
+
+    .container {
+    margin: 0;
+    padding: 0;
+    }
+
+    h3 {
+    font-size: 2rem;
+    font-weight: 600;
+    color: #007bff;
+    margin-bottom: 20px;
+    text-align: left;
+    }
+
+    .form-group {
+    margin-top: 15px;
+    margin-bottom: 15px;
+    }
+
+    input.form-control {
+    font-size: 1rem;
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    width: 100%;
+    }
+
+    input.form-control:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+    }
+
+    .text-center.text-success {
+    font-size: 1rem;
+    color: #28a745;
+    font-weight: bold;
+    text-align: center;
+    }
+
+    .table {
+    width: 100%;
+    margin-top: 20px;
+    border-collapse: collapse;
+    font-size: 16px;
+    border-radius: 5px;
+    overflow: hidden;
+    }
+
+    .table th, .table td {
+    padding: 12px;
+    text-align: left;
+    border: 1px solid #dee2e6;
+    }
+
+    .table th {
+    background-color: #007bff;
+    color: white;
+    }
+
+    .table tr:nth-child(even) {
+    background-color: #f9f9f9;
+    }
+
+    .table td input {
+    width: 80px;
+    padding: 8px;
+    font-size: 14px;
+    border-radius: 5px;
+    }
+
+    .table td button {
+    padding: 8px 12px;
+    font-size: 14px;
+    cursor: pointer;
+    border-radius: 5px;
+    transition: background-color 0.3s ease;
+    background-color: #007bff;
+    color: white;
+    }
+
+    .table td button:hover {
+    background-color: #0056b3;
+    }
+
+    .modal-content {
+    border-radius: 10px;
+    background-color: #fff;
+    padding: 30px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .modal-header {
+    background-color: #007bff;
+    color: white;
+    padding-bottom: 15px;
+    font-size: 1.2rem;
+    font-weight: bold;
+    }
+
+    .modal-footer {
+    border-top: 1px solid #ddd;
+    padding-top: 15px;
+    }
+
+    .mt-3 {
+    margin-top: 20px;
+    }
+
+    .ml-2 {
+    margin-left: 10px;
+    }
+
+    .w-auto {
+    width: auto;
+    }
+
+</style>
+
+<div class="container">
+    <div class="content-wrapper">
+        <h3 class="text-primary">ÜRÜNLER</h3>
+
+        @if (isAdmin)
+        {
+            @if (!productUpdating && !productAdding)
+            {
+                <button @onclick="OpenAddProductPanel" class="btn btn-primary">Yeni Ürün</button>
+            }
+
+            @if (productAdding)
+            {
+                <button @onclick="OpenAddProductPanel" class="btn btn-secondary">Vazgeç</button>
+                <div class="form-group">
+                    <input @bind="productCode" placeholder="Ürün Kodu" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <input @bind="productName" placeholder="Ürün Adı" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <input @bind="productPrice" type="number" step="0.01" placeholder="Ürün Fiyatı" class="form-control" />
+                </div>
+                <button @onclick="AddProduct" class="btn btn-success">Ürün Ekle</button>
+                <p>@message</p>
+            }
+
+            @if (productUpdating)
+            {
+                <button @onclick="CloseUpdateProductPanel" class="btn btn-secondary">Vazgeç</button>
+                <div class="form-group">
+                    <input @bind="productCode" placeholder="Ürün Kodu" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <input @bind="productName" placeholder="Ürün Adı" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <input @bind="productPrice" type="number" step="0.01" placeholder="Ürün Fiyatı" class="form-control" />
+                </div>
+                <button @onclick="UpdateProduct" class="btn btn-warning">Ürün Güncelle</button>
+                <p>@message</p>
+            }
+        }
+
+        @if (products == null || !products.Any())
+        {
+            <p>Kayıtlı ürün bulunamadı.</p>
+        }
+        else
+        {
+            @if (!isAdmin)
+            {
+                <p>Sepette @GetCartItemCount() adet ürün var!</p>
+            }
+
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        @if (isAdmin)
+                        {
+                            <th></th>
+                        }
+                        <th>Ürün Kodu</th>
+                        <th>Ürün Adı</th>
+                        <th>Ürün Fiyatı</th>
+                        @if (!isAdmin)
+                        {
+                            <th></th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var product in products)
+                    {
+                        if (!addedAmount.ContainsKey(product.Id))
+                        {
+                            addedAmount.Add(product.Id, 1);
+                        }
+                        <tr>
+                            @if (isAdmin)
+                            {
+                                <td>
+                                    <button class="btn btn-danger btn-sm" @onclick="() => RemoveProduct(product.Id)">Sil</button>
+                                    <button class="btn btn-primary btn-sm" @onclick="() => OpenUpdateProductPanel(product)">Güncelle</button>
+                                </td>
+                            }
+                            <td>@product.UrunKodu</td>
+                            <td>@product.UrunAdi</td>
+                            <td>@product.Fiyat TL</td>
+                            @if (!isAdmin)
+                            {
+                                <td class="product-actions">
+                                    <input class="amount-input" type="number" @bind="addedAmount[product.Id]" min="1" />
+                                    <button class="btn btn-primary" @onclick="() => AddToCart(product)">Sepete Ekle</button>
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <ProductAddedToCartModal IsVisible="@showAddedToCartModal"
+            Product="@addedToCartModalProduct"
+            Quantity="@addedToCartModalQuantity"
+            OnClose="CloseAddedToCartModal" />
+        }
+    </div>
+</div>
+
+@code {
+    private List<Product> products = new();
+    private List<CartItem> cart = new();
+    private Dictionary<int, int> addedAmount = new();
+    private bool productAdding = false;
+    private bool productUpdating = false;
+    private string message = "";
+    private int productId = 0;
+    private string productCode = "";
+    private string productName = "";
+    private decimal productPrice = 0;
+    private bool showAddedToCartModal = false;
+    private Product addedToCartModalProduct = new();
+    private int addedToCartModalQuantity = 0;
+    private bool isAdmin = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var getUserDto = await AuthState.GetAuthenticationStateAsync();
+
+        if (getUserDto == null)
+        {
+            NavManager.NavigateTo("/login");
+        }
+
+        else
+        {
+            isAdmin = getUserDto.Rol.Equals("Admin");
+
+            var loadedCart = await CartService.LoadCartFromLocalStorage(getUserDto.KullaniciAdi);
+            if (loadedCart != null) cart = loadedCart;
+
+            await ListProducts();
+            await RefreshCartListForPriceChange();
+        }
+    }
+
+    private async Task ListProducts()
+    {
+        try
+        {
+            var response = await Http.GetAsync("https://localhost:7144/api/products");
+
+            var result = await response.Content.ReadFromJsonAsync<Result>();
+
+            if (result?.StatusCode == StatusCodeEnum.Ok && result.Data != null)
+            {
+                var resultProducts = JsonSerializer.Deserialize<IEnumerable<Product>>(result.Data.ToString()!, 
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                if(resultProducts != null)
+                    products = resultProducts.ToList();
+
+                foreach(Product p in products)
+                {
+                    Console.WriteLine(p.UrunAdi);
+                }
+            }
+            else
+            {
+                message = result?.ErrorMessage ?? "Bilinmeyen bir hata oluştu.";
+            }
+        }
+        catch (Exception ex)
+        {
+            message = $"Bir hata oluştu: {ex.Message}";
+        }
+    }
+
+    private void ClearVariables()
+    {
+        message = "";
+        productId = 0;
+        productCode = "";
+        productName = "";
+        productPrice = 0;
+    }
+
+    private void OpenAddProductPanel()
+    {
+        ClearVariables();
+        productAdding = !productAdding;
+    }
+
+    private void OpenUpdateProductPanel(Product product)
+    {
+        ClearVariables();
+        productAdding = false;
+        productUpdating = true;
+        productId = product.Id;
+        productCode = product.UrunKodu;
+        productName = product.UrunAdi;
+        productPrice = product.Fiyat;
+    }
+
+    private void CloseUpdateProductPanel()
+    {
+        ClearVariables();
+        productUpdating = false;
+    }
+
+    private async Task AddProduct()
+    {
+        AddProductDto addProductDto = new AddProductDto();
+        addProductDto.UrunKodu = productCode;
+        addProductDto.UrunAdi = productName;
+        addProductDto.Fiyat = productPrice;
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync("https://localhost:7144/api/products", addProductDto);
+
+            if (response.IsSuccessStatusCode)
+            {
+                ClearVariables();
+                message = "Ürün başarıyla eklendi!";
+                await ListProducts();
+            }
+            else
+            {
+                var result = await response.Content.ReadFromJsonAsync<Result>();
+                message = result?.ErrorMessage ?? "Bilinmeyen bir hata oluştu.";
+            }
+        }
+        catch (Exception ex)
+        {
+            message = $"Bir hata oluştu: {ex.Message}";
+        }
+    }
+
+    private async Task UpdateProduct()
+    {
+        UpdateProductDto updateProductDto = new UpdateProductDto();
+        updateProductDto.Id = productId;
+        updateProductDto.UrunKodu = productCode;
+        updateProductDto.UrunAdi = productName;
+        updateProductDto.Fiyat = productPrice;
+
+        try
+        {
+            var response = await Http.PutAsJsonAsync("https://localhost:7144/api/products", updateProductDto);           
+
+            if (response.IsSuccessStatusCode)
+            {
+                CloseUpdateProductPanel();
+                await ListProducts();
+            }
+            else
+            {
+                var result = await response.Content.ReadFromJsonAsync<Result>();
+                message = result?.ErrorMessage ?? "Bilinmeyen bir hata oluştu.";
+            }
+        }
+        catch (Exception ex)
+        {
+            message = $"Bir hata oluştu: {ex.Message}";
+        }
+    }
+
+    private async Task RemoveProduct(int productId)
+    {
+        try
+        {
+            var response = await Http.DeleteAsync($"https://localhost:7144/api/products?id={productId}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                await ListProducts();
+            }
+            else
+            {
+                var result = await response.Content.ReadFromJsonAsync<Result>();
+                message = result?.ErrorMessage ?? "Bilinmeyen bir hata oluştu.";
+            }
+        }
+        catch (Exception ex)
+        {
+            message = $"Bir hata oluştu: {ex.Message}";
+        }
+    }
+
+    private async Task AddToCart(Product product)
+    {
+        if (addedAmount[product.Id] <= 0) return;
+
+        var currentUser = await AuthState.GetAuthenticationStateAsync();
+        if (currentUser == null) return;
+
+        var oldProduct = cart.Find(x => x.Product.Id == product.Id);
+
+        if (oldProduct != null)
+            oldProduct.AddQuantity(addedAmount[product.Id]);
+        else
+            cart.Add(new CartItem(product, addedAmount[product.Id]));
+
+        await CartService.SaveCartToLocalStorage(currentUser.KullaniciAdi, cart);
+
+        addedToCartModalProduct = product;
+        addedToCartModalQuantity = addedAmount[product.Id];
+        showAddedToCartModal = true;
+
+        addedAmount[product.Id] = 1;
+    }
+
+    private void CloseAddedToCartModal()
+    {
+        showAddedToCartModal = false;
+        addedToCartModalProduct = new();
+        addedToCartModalQuantity = 0;
+    }
+
+    private int GetCartItemCount()
+    {
+        int total = 0;
+        foreach (CartItem item in cart)
+        {
+            total += item.Quantity;
+        }
+        return total;
+    }
+
+    private async Task RefreshCartListForPriceChange()
+    {
+        var currentUser = await AuthState.GetAuthenticationStateAsync();
+        if (currentUser == null) return;
+
+        for (int i = 0; i < cart.Count; i++)
+        {
+            var product = products.Find(x => x.Id == cart[i].Product.Id);
+            if (product == null)
+            {
+                cart.Remove(cart[i]);
+                continue;
+            }
+
+            cart[i].UpdateProductPrice(product.Fiyat);
+            await CartService.SaveCartToLocalStorage(currentUser.KullaniciAdi, cart);
+        }
+    }
+}

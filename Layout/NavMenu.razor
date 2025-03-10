@@ -1,0 +1,156 @@
+﻿@using E_Ticaret_WebAssembly.Dtos.User
+@inject AuthState AuthState
+@inject NavigationManager NavManager
+
+<style>
+    .navbar-brand {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #ffffff;
+    transition: color 0.3s ease;
+    }
+
+    .navbar-brand:hover {
+    color: #f8f9fa;
+    }
+
+    .nav-link {
+    font-size: 1.1rem;
+    font-weight: normal;
+    color: #ffffff;
+    padding: 10px 15px;
+    margin-left: 5px;
+    margin-right: 5px;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    .nav-link:hover {
+    color: #f8f9fa;
+    background-color: #495057;
+    border-radius: 5px;
+    }
+
+    .nav-link.active {
+    color: #00bcd4;
+    background-color: #343a40;
+    border-radius: 5px;
+    }
+
+    .btn-danger {
+    font-size: 1.1rem;
+    font-weight: bold;
+    background-color: #dc3545;
+    border-color: #dc3545;
+    padding: 10px 20px;
+    transition: background-color 0.3s ease;
+    }
+
+    .btn-danger:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+    }
+
+    .dx-button {
+    font-size: 1.1rem;
+    font-weight: bold;
+    }
+</style>
+
+@if (isAuthenticated)
+{
+    <nav class="navbar navbar-dark">
+        @if (authState != null)
+        {
+            <a class="navbar-brand mx-auto" href="/" style="text-align: center;">Merhaba @authState.KullaniciAdi</a>
+        }
+        <div class="navbar-nav flex-column w-100 text-center">
+            <ul class="nav flex-column w-100">
+                <li class="nav-item">
+                    <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">Ana Sayfa</NavLink>
+                </li>
+                <li class="nav-item">
+                    <NavLink class="nav-link" href="/changepassword" Match="NavLinkMatch.All">Şifreyi Değiştir</NavLink>
+                </li>
+                <li class="nav-item">
+                    <NavLink class="nav-link" href="/products" Match="NavLinkMatch.All">Ürünler</NavLink>
+                </li>
+                @if (!isAdmin)
+                {
+                    <li class="nav-item">
+                        <NavLink class="nav-link" href="/cart" Match="NavLinkMatch.All">Sepet</NavLink>
+                    </li>
+                }
+                <li class="nav-item">
+                    <NavLink class="nav-link" href="/orders" Match="NavLinkMatch.All">Siparişler</NavLink>
+                </li>
+            </ul>
+            <button class="btn btn-danger mt-2 mx-auto d-block" @onclick="Logout">Çıkış Yap</button>
+        </div>
+    </nav>
+}
+else
+{
+    <div class="text-center mt-3">
+        <NavLink class="btn btn-primary me-2 mb-2" href="/login">Giriş Yap</NavLink>
+        <NavLink class="btn btn-secondary mb-2" href="/register">Kayıt Ol</NavLink>
+    </div>
+}
+
+@code {
+    private bool collapseNavMenu = true;
+
+    private bool isAuthenticated = false;
+    private bool isAdmin = false;
+
+    private GetUserDto? authState;
+
+    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+
+
+    protected override void OnInitialized()
+    {
+        CheckAuth();
+
+        AuthState.OnLogin += OnLogin;
+        AuthState.OnLogout += OnLogout;
+    }
+
+    private async void CheckAuth()
+    {
+        authState = await AuthState.GetAuthenticationStateAsync();
+        if (authState != null)
+        {
+            isAuthenticated = true;
+            isAdmin = authState.Rol.Equals("Admin");
+            StateHasChanged();
+        }
+        else
+        {
+            isAuthenticated = false;
+        }
+    }
+
+    private void OnLogin()
+    {
+        CheckAuth();
+        StateHasChanged();
+    }
+
+    private void OnLogout()
+    {
+        isAdmin = false;
+        isAuthenticated = false;
+        StateHasChanged();
+    }
+
+    private void ToggleNavMenu()
+    {
+        collapseNavMenu = !collapseNavMenu;
+    }
+
+    private async Task Logout()
+    {
+        await AuthState.MarkUserAsLoggedOut();
+        NavManager.NavigateTo("/login");
+    }
+}

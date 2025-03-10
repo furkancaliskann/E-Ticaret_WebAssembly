@@ -1,0 +1,76 @@
+﻿@inherits LayoutComponentBase
+
+<style>
+
+    .sidebar {
+        background-color: #343a40;
+        color: white;
+    }
+
+        .sidebar .nav-link {
+            color: #bbb;
+            padding-left: 15px;
+        }
+
+            .sidebar .nav-link:hover {
+                color: white;
+                background-color: #495057;
+            }
+
+        .sidebar .navbar-brand {
+            color: white;
+        }
+
+            .sidebar .navbar-brand:hover {
+                color: #f8f9fa;
+            }
+
+    .top-row {
+        margin-bottom: 15px;
+    }
+
+        .top-row.pb-2 {
+            padding-bottom: 0 !important;
+        }
+
+    h2.text-primary {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        color: #007bff;
+    }
+
+    #blazor-error-ui {
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+    }
+
+        #blazor-error-ui .btn {
+            margin-left: 10px;
+        }
+
+
+</style>
+
+<div class="container-fluid">
+    <div class="row flex-nowrap">
+        <!-- Sidebar -->
+        <div class="col-12 col-md-3 col-lg-2 bg-dark sidebar p-3 d-flex flex-column">
+            <NavMenu />
+        </div>
+
+        <!-- Main Content -->
+        <div class="col p-4">
+            <div class="top-row d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+                <h2 class="text-primary">E-Ticaret</h2>
+            </div>
+            <article class="content">
+                @Body
+            </article>
+        </div>
+    </div>
+</div>
+
+<div id="blazor-error-ui" class="alert alert-danger text-center mt-3">
+    An unhandled error has occurred.
+    <a href="" class="btn btn-sm btn-danger">Reload</a>
+    <button class="btn btn-sm btn-light dismiss">🗙</button>
+</div>

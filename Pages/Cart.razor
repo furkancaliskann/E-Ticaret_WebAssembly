@@ -1,0 +1,330 @@
+﻿@page "/cart"
+@using E_Ticaret_WebAssembly.Dtos
+@using E_Ticaret_WebAssembly.Dtos.Order
+@using E_Ticaret_WebAssembly.Dtos.User
+@using E_Ticaret_WebAssembly.Entities
+@using System.Text.Json;
+@inject NavigationManager NavManager
+@inject AuthState AuthState
+@inject CartService CartService
+@inject HttpClient Http
+
+<style>
+
+    body {
+    font-family: 'Arial', sans-serif;
+    background-color: #f8f9fa;
+    color: #333;
+    }
+
+    h3 {
+    font-size: 2rem;
+    font-weight: 600;
+    color: #007bff;
+    margin-bottom: 20px;
+    text-align: left;
+    }
+
+    .table {
+    width: 100%;
+    margin-top: 20px;
+    border-collapse: collapse;
+    }
+
+    .table th, .table td {
+    padding: 12px;
+    text-align: left;
+    border: 1px solid #dee2e6;
+    }
+
+    .table th {
+    background-color: #007bff;
+    color: white;
+    }
+
+    .table td {
+    background-color: #fff;
+    }
+
+    button.btn-sm {
+    font-size: 0.875rem;
+    padding: 5px 10px;
+    border-radius: 5px;
+    transition: background-color 0.3s ease;
+    }
+
+    button.btn-sm:hover {
+    opacity: 0.8;
+    }
+
+    button.btn-danger {
+    background-color: #dc3545;
+    border-color: #dc3545;
+    }
+
+    button.btn-danger:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+    }
+
+    button.btn-primary {
+    background-color: #007bff;
+    border-color: #007bff;
+    }
+
+    button.btn-primary:hover {
+    background-color: #0056b3;
+    border-color: #004085;
+    }
+
+    input[type="number"] {
+    width: 100px;
+    padding: 5px;
+    margin-right: 10px;
+    font-size: 1rem;
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    transition: border-color 0.3s ease;
+    }
+
+    input[type="number"]:focus {
+    border-color: #007bff;
+    outline: none;
+    }
+
+    h3.text-success {
+    font-size: 1.5rem;
+    color: #28a745;
+    }
+
+    button.btn-primary.btn-sm.mt-3 {
+    background-color: #28a745;
+    border-color: #28a745;
+    }
+
+    button.btn-primary.btn-sm.mt-3:hover {
+    background-color: #218838;
+    border-color: #1e7e34;
+    }
+
+    .modal-content {
+    border-radius: 10px;
+    background-color: #fff;
+    padding: 30px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .modal-header {
+    background-color: #007bff;
+    color: white;
+    padding-bottom: 15px;
+    font-size: 1.2rem;
+    font-weight: bold;
+    }
+
+    .modal-footer {
+    border-top: 1px solid #ddd;
+    padding-top: 15px;
+    }
+
+    .mt-3 {
+    margin-top: 20px;
+    }
+
+    .ml-2 {
+    margin-left: 10px;
+    }
+
+    .w-auto {
+    width: auto;
+    }
+
+</style>
+
+<h3 class="text-primary">Sepet</h3>
+
+<table class="table table-bordered table-striped">
+    <thead>
+        <tr>
+            <th>Ürün Kodu</th>
+            <th>Ürün Adı</th>
+            <th>Ürün Miktarı</th>
+            <th>Ürün Fiyatı</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in cart)
+        {
+            if (!amount.ContainsKey(item.Product.Id))
+            {
+                amount.Add(item.Product.Id, item.Quantity);
+            }
+            <tr>
+                <td>@item.Product.UrunKodu</td>
+                <td>@item.Product.UrunAdi</td>
+                <td>@item.Quantity</td>
+                <td>@item.TotalPrice TL</td>
+                <td>
+                    <input type="number" step="1" min="1" value="@amount[item.Product.Id]" @onchange="(e) => UpdateProductQuantity(item.Product.Id, e)" class="form-control w-auto d-inline-block" />
+                    <button class="btn btn-danger btn-sm ml-2" @onclick="() => RemoveProductFromCart(item.Product.Id)">Ürünü Çıkar</button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@if (cart.Count > 0)
+{
+    <h3 class="text-success mt-3">Sipariş Tutarı: @CalculateTotalCost() TL</h3>
+    <button class="btn btn-primary btn-sm mt-3" @onclick="() => ConfirmOrder()">Siparişi Onayla</button>
+}
+
+<OrderConfirmedModal IsVisible="@showModal" OrderNumber="@orderNumber" />
+
+@code {
+    private List<Product> products = new();
+    private List<CartItem> cart = new();
+    private Dictionary<int, int> amount = new();
+
+    private bool showModal = false;
+    private string? orderNumber;
+
+    private GetUserDto? authState = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        authState = await AuthState.GetAuthenticationStateAsync();
+
+        if (authState == null || authState.Rol.Equals("Admin"))
+        {
+            NavManager.NavigateTo("/login");
+            return;
+        }
+
+
+        var loadedCart = await CartService.LoadCartFromLocalStorage(authState.KullaniciAdi);
+        if (loadedCart != null) cart = loadedCart;
+
+        await ListProducts();
+        await RefreshCartListForPriceChange();
+    }
+
+    private async Task ListProducts()
+    {
+        try
+        {
+            var response = await Http.GetAsync("https://localhost:7144/api/products");
+
+            var result = await response.Content.ReadFromJsonAsync<Result>();
+
+            if (result?.StatusCode == StatusCodeEnum.Ok && result.Data != null)
+            {
+                var resultProducts = JsonSerializer.Deserialize<IEnumerable<Product>>(result.Data.ToString()!,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                if (resultProducts != null)
+                    products = resultProducts.ToList();
+            }
+        }
+        catch
+        {
+
+        }
+    }
+
+    private async Task UpdateProductQuantity(int id, ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int newQuantity) && newQuantity > 0)
+        {
+            var cartItem = cart.Find(x => x.Product.Id == id);
+            if (cartItem == null) return;
+
+            amount[id] = newQuantity;
+            cartItem.UpdateQuantity(newQuantity);
+
+            await CartService.SaveCartToLocalStorage(authState!.KullaniciAdi, cart);
+        }
+    }
+
+    private async Task RemoveProductFromCart(int id)
+    {
+        var cartItem = cart.Find(x => x.Product.Id == id);
+        if (cartItem == null) return;
+        cart.Remove(cartItem);
+        await CartService.SaveCartToLocalStorage(authState!.KullaniciAdi, cart);
+    }
+
+    private async Task RemoveAllProductsFromCart()
+    {
+        cart.Clear();
+        await CartService.SaveCartToLocalStorage(authState!.KullaniciAdi, cart);
+    }
+
+    private decimal CalculateTotalCost()
+    {
+        decimal total = 0;
+
+        foreach (CartItem item in cart)
+        {
+            total += item.TotalPrice;
+        }
+
+        return total;
+    }
+
+    private async Task RefreshCartListForPriceChange()
+    {
+        for (int i = 0; i < cart.Count; i++)
+        {
+            var product = products.Find(x => x.Id == cart[i].Product.Id);
+            if (product == null || product.IsDeleted)
+            {
+                cart.Remove(cart[i]);
+                continue;
+            }
+
+            cart[i].UpdateProductPrice(product.Fiyat);
+            await CartService.SaveCartToLocalStorage(authState!.KullaniciAdi, cart);
+        }
+    }
+
+    private async Task ConfirmOrder()
+    {
+        string? userId = authState!.Id.ToString();
+
+        if (string.IsNullOrEmpty(userId)) return;
+
+        List<OrderProductDto> orderProductList = new();
+
+        foreach (CartItem item in cart)
+        {
+            OrderProductDto orderProduct = new();
+            orderProduct.ProductId = item.Product.Id;
+            orderProduct.Quantity = item.Quantity;
+            orderProductList.Add(orderProduct);
+        }
+
+        AddOrderDto addOrderDto = new();
+        addOrderDto.UserId = int.Parse(userId);
+        addOrderDto.Products = orderProductList;
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync("https://localhost:7144/api/orders", addOrderDto);
+
+            var result = await response.Content.ReadFromJsonAsync<Result>();
+
+            if (result?.StatusCode == StatusCodeEnum.Ok && result.Data != null)
+            {
+                orderNumber = JsonSerializer.Deserialize<int>(result.Data.ToString()!, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }).ToString();
+                showModal = true;
+                await RemoveAllProductsFromCart();
+            }
+        }
+        catch
+        {
+            
+        }
+    }
+}
